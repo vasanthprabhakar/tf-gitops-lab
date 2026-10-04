@@ -1,0 +1,9 @@
+# Terraform working files and state - never commit
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+*.tfvars
+*.tfplan
+tfplan
+plan.txt
