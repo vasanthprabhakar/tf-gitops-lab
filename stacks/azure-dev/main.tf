@@ -17,7 +17,7 @@ resource "azurerm_virtual_network" "spoke" {
   address_space       = ["10.40.0.0/22"]
   tags = {
     owner       = "platform"
-    cost_center = "cc-100"
+    cost_center = "cc-200"
     managed_by  = "terraform"
   }
 }

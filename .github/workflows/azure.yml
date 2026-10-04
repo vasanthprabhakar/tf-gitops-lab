@@ -1,7 +1,6 @@
 name: azure-dev
 on:
   pull_request:
-    paths: ["stacks/azure-dev/**", ".github/workflows/azure.yml"]
   push:
     branches: [main]
     paths: ["stacks/azure-dev/**", ".github/workflows/azure.yml"]
