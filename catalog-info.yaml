@@ -1,0 +1,11 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: tf-gitops-lab
+  description: Lab Terraform stack with a PR-driven pipeline.
+  annotations:
+    github.com/project-slug: vasanthprabhakar/tf-gitops-lab
+spec:
+  type: terraform-stack
+  lifecycle: experimental
+  owner: group:guests
