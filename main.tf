@@ -13,7 +13,7 @@ variable "environment" {
 
 variable "subnets" {
   type    = map(number)
-  default = { app = 2, data = 2, pe = 2 }
+  default = { app = 2, data = 2, pe = 2, web = 2 }
 }
 
 locals {
