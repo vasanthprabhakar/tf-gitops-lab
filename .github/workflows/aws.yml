@@ -1,0 +1,76 @@
+name: aws-dev
+on:
+  pull_request:
+  push:
+    branches: [main]
+    paths: ["stacks/aws-dev/**", ".github/workflows/aws.yml"]
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+defaults:
+  run:
+    working-directory: stacks/aws-dev
+jobs:
+  plan:
+    name: aws-plan
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: "1.16.4"
+          terraform_wrapper: false
+      - name: Terraform init (S3 state, OIDC)
+        run: >-
+          terraform init -input=false
+          -backend-config="bucket=${{ vars.TFSTATE_BUCKET }}"
+          -backend-config="key=aws-dev/terraform.tfstate"
+          -backend-config="region=${{ vars.AWS_REGION }}"
+          -backend-config="use_lockfile=true"
+      - run: terraform fmt -check
+      - run: terraform validate -no-color
+      - name: Terraform plan
+        id: plan
+        run: |
+          set +e
+          terraform plan -detailed-exitcode -no-color -input=false > plan.txt
+          code=$?
+          set -e
+          cat plan.txt
+          echo "exitcode=$code" >> "$GITHUB_OUTPUT"
+          if [ "$code" -eq 1 ]; then exit 1; fi
+      - name: Comment plan on the PR
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          { echo '```'; tail -c 60000 plan.txt; echo '```'; } > comment.md
+          gh pr comment ${{ github.event.pull_request.number }} --body-file comment.md
+  apply:
+    if: github.event_name == 'push'
+    needs: plan
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: "1.16.4"
+          terraform_wrapper: false
+      - name: Terraform init (S3 state, OIDC)
+        run: >-
+          terraform init -input=false
+          -backend-config="bucket=${{ vars.TFSTATE_BUCKET }}"
+          -backend-config="key=aws-dev/terraform.tfstate"
+          -backend-config="region=${{ vars.AWS_REGION }}"
+          -backend-config="use_lockfile=true"
+      - name: Terraform apply
+        run: terraform apply -auto-approve -input=false -no-color
