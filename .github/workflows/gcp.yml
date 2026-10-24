@@ -1,0 +1,73 @@
+name: gcp-dev
+on:
+  pull_request:
+  push:
+    branches: [main]
+    paths: ["stacks/gcp-dev/**", ".github/workflows/gcp.yml"]
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+
+env:
+  TF_VAR_project_id: ${{ vars.GCP_PROJECT_ID }}
+
+defaults:
+  run:
+    working-directory: stacks/gcp-dev
+
+jobs:
+  plan:
+    name: gcp-plan
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: "1.16.4"
+          terraform_wrapper: false
+      - name: Terraform init (GCS state, WIF)
+        run: terraform init -input=false -backend-config="bucket=${{ vars.TFSTATE_BUCKET }}" -backend-config="prefix=gcp-dev"
+      - run: terraform fmt -check
+      - run: terraform validate -no-color
+      - name: Terraform plan
+        id: plan
+        run: |
+          set +e
+          terraform plan -detailed-exitcode -no-color -input=false > plan.txt
+          code=$?
+          set -e
+          cat plan.txt
+          echo "exitcode=$code" >> "$GITHUB_OUTPUT"
+          if [ "$code" -eq 1 ]; then exit 1; fi
+      - name: Comment plan on the PR
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          { echo '```'; tail -c 60000 plan.txt; echo '```'; } > comment.md
+          gh pr comment ${{ github.event.pull_request.number }} --body-file comment.md
+
+  apply:
+    if: github.event_name == 'push'
+    needs: plan
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: "1.16.4"
+          terraform_wrapper: false
+      - name: Terraform init (GCS state, WIF)
+        run: terraform init -input=false -backend-config="bucket=${{ vars.TFSTATE_BUCKET }}" -backend-config="prefix=gcp-dev"
+      - name: Terraform apply
+        run: terraform apply -auto-approve -input=false -no-color
